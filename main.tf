@@ -103,6 +103,12 @@ resource "azurerm_storage_container" "population" {
   container_access_type = "private"
 }
 
+resource "azurerm_storage_container" "config" {
+  name                  = var.storage_container_name1
+  storage_account_id   = azurerm_storage_account.storage.id
+  container_access_type = "private"
+}
+
 resource "azurerm_storage_container" "datalake_container" {
   name                  = var.storage_container_name_dl
   storage_account_id   = azurerm_storage_account.datalake.id
@@ -111,12 +117,22 @@ resource "azurerm_storage_container" "datalake_container" {
 
 #just too add file can be removed, and file can be addes manually (independent block)
 resource "azurerm_storage_blob" "local_file" {
-  name                   = "population_by_age.tsv" # blob name in container
+  name                   = "${var.population_file_name}" # blob name in container
   storage_account_name     = azurerm_storage_account.storage.name
   storage_container_name = azurerm_storage_container.population.name
   type                   = "Block"
-  source                 = "C:\\Users\\prith\\Downloads\\population_by_age.tsv.gz" # local file path
+  source                 = "C:\\Users\\prith\\Downloads\\${var.population_file_name}" # local file path
 }
+
+resource "azurerm_storage_blob" "config_file" {
+  name                   = var.files_to_be_analyzed
+  storage_account_name   = azurerm_storage_account.storage.name
+  storage_container_name = azurerm_storage_container.config.name
+  type                   = "Block"
+  source                 = "C:\\Users\\prith\\Downloads\\${var.population_file_name}"
+  content_type           = "application/json"
+}
+
 
 
 #PIPELINE1
@@ -167,6 +183,7 @@ resource "azurerm_resource_group_template_deployment" "data_factory_linked_servi
 TEMPLATE
 }
 
+
 #dataset for source data set blob_storage
 resource "azurerm_resource_group_template_deployment" "ds_population_raw_gz" {
   name                = "deploy-ds-population-raw-gz"
@@ -197,7 +214,7 @@ resource "azurerm_resource_group_template_deployment" "ds_population_raw_gz" {
             "location": {
               "type": "AzureBlobStorageLocation",
               "container": "population",
-              "fileName": "population_by_age.tsv.gz"
+              "fileName": "${var.population_file_name}"
             },
             "columnDelimiter": "\t",
             
@@ -250,7 +267,7 @@ resource "azurerm_resource_group_template_deployment" "ds_population_raw_dls" {
             "type": "AzureBlobFSLocation",
             "fileSystem": "raw",
             "folderPath": "population",
-            "fileName": "population_by_age.tsv"
+            "fileName": "${var.population_file_name}"
           },
           "columnDelimiter": "\t",
           
@@ -270,6 +287,7 @@ TEMPLATE
   })
   
 }
+
 
 # Pipeline to copy data from Blob Storage to Data Lake Gen2
 
@@ -435,3 +453,356 @@ TEMPLATE
   })
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+resource "azurerm_resource_group_template_deployment" "http_linked_service" {
+  name                = "deploy-http-linked-service"
+  resource_group_name = var.resource_group_name
+  deployment_mode     = "Incremental"
+
+  template_content = <<TEMPLATE
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "resources": [
+    {
+      "name": "[concat('${azurerm_data_factory.adf.name}', '/ls_http_openenddata_ecds')]",
+      "type": "Microsoft.DataFactory/factories/linkedservices",
+      "apiVersion": "2018-06-01",
+      "properties": {
+        "type": "HttpServer",
+        "typeProperties": {
+          "url": "https://github.com",
+          "enableServerCertificateValidation": true
+        }
+      }
+    }
+  ]
+}
+TEMPLATE
+}
+
+
+
+resource "azurerm_resource_group_template_deployment" "ds_https_death_caeses_http" {
+  name                = "deploy-ds-https-death-caeses-http"
+  resource_group_name = var.resource_group_name
+  deployment_mode     = "Incremental"
+
+  template_content = <<TEMPLATE
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "dataFactoryName": { "type": "string" }
+  },
+  "resources": [
+    {
+      "name": "[concat(parameters('dataFactoryName'), '/ds_https_death_caeses_http')]",
+      "type": "Microsoft.DataFactory/factories/datasets",
+      "apiVersion": "2018-06-01",
+      "properties": {
+        "linkedServiceName": {
+          "referenceName": "ls_http_openenddata_ecds",
+          "type": "LinkedServiceReference"
+        },
+        "parameters": {
+          "relativeUrl": { "type": "String" }
+        },
+        "type": "DelimitedText",
+        "typeProperties": {
+          "location": {
+            "type": "HttpServerLocation",
+            "relativeUrl": "@dataset().relativeUrl"
+          },
+          "columnDelimiter": "\t",
+          "firstRowAsHeader": true,
+          "encodingName": "UTF-8"
+        }
+      }
+    }
+  ]
+}
+TEMPLATE
+
+  parameters_content = jsonencode({
+    dataFactoryName = { value = azurerm_data_factory.adf.name }
+  })
+}
+
+
+resource "azurerm_resource_group_template_deployment" "ds_population_raw_dls_https_new" {
+  name                = "deploy-ds-population-raw-dls-https-new"
+  resource_group_name = var.resource_group_name
+  deployment_mode     = "Incremental"
+
+  template_content = <<TEMPLATE
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "dataFactoryName": { "type": "string" },
+    "folderPath": { "type": "String" },
+    "fileName": { "type": "String" }
+  },
+  "resources": [
+    {
+      "name": "[concat(parameters('dataFactoryName'), '/ds_population_raw_dls_https_new')]",
+      "type": "Microsoft.DataFactory/factories/datasets",
+      "apiVersion": "2018-06-01",
+      "properties": {
+        "linkedServiceName": {
+          "referenceName": "ls_dla_covidreportingdlsapc",
+          "type": "LinkedServiceReference"
+        },
+        "type": "DelimitedText",
+        "parameters": {
+          "fileName": { "type": "String" },
+          "folderPath": { "type": "String" }
+        },
+        "typeProperties": {
+          "location": {
+            "type": "AzureBlobFSLocation",
+            "fileSystem": "raw",
+            "folderPath": "@dataset().folderPath",
+            "fileName": "@dataset().fileName"
+          },
+          "columnDelimiter": ",",
+          "encodingName": "UTF-8",
+          "firstRowAsHeader": true
+        }
+      }
+    }
+  ]
+}
+TEMPLATE
+
+  parameters_content = jsonencode({
+    dataFactoryName = { value = azurerm_data_factory.adf.name },
+    folderPath      = { value = "ecdc_data" },          # static folder
+    fileName        = { value = "placeholder.csv" }     # placeholder for ARM/TF deployment
+  })
+}
+
+
+resource "azurerm_data_factory_pipeline" "pl_sync_https_to_dls" {
+  name            = "pl_sync_https_to_dls"
+  data_factory_id = azurerm_data_factory.adf.id
+  concurrency     = 1
+
+  variables = {
+    fileList       = <<EOF
+[
+  "cases_deaths.csv",
+  "country_response.csv"
+]
+EOF
+    sinkFolderPath = "ecdc_data"
+  }
+
+  activities_json = <<ACTIVITIES
+[
+  {
+    "name": "ForEachCopyFiles",
+    "type": "ForEach",
+    "typeProperties": {
+      "items": {
+        "value": "@json(variables('fileList'))",
+        "type": "Expression"
+      },
+      "activities": [
+        {
+          "name": "CopyFile",
+          "type": "Copy",
+          "typeProperties": {
+            "source": {
+              "type": "DelimitedTextSource"
+            },
+            "sink": {
+              "type": "DelimitedTextSink"
+            }
+          },
+          "inputs": [
+            {
+              "referenceName": "ds_https_death_caeses_http",
+              "type": "DatasetReference",
+              "parameters": {
+                "relativeUrl": "@concat('cloudboxacademy/covid19/main/ecdc_data/', item())"
+
+              }
+            }
+          ],
+          "outputs": [
+            {
+              "referenceName": "ds_population_raw_dls_https_new",
+              "type": "DatasetReference",
+              "parameters": {
+                "folderPath": "@variables('sinkFolderPath')"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
+ACTIVITIES
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+///pipline 3(will pass a json file with all the sources )
+# Dataset for JSON file stored in bols storage-json
+
+resource "azurerm_resource_group_template_deployment" "ds_http_files_json" {
+  name                = "deploy-ds-http-files-json"
+  resource_group_name = var.resource_group_name
+  deployment_mode     = "Incremental"
+
+  template_content = <<TEMPLATE
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "resources": [
+    {
+      "name": "[concat('${azurerm_data_factory.adf.name}', '/ds_http_files_json')]",
+      "type": "Microsoft.DataFactory/factories/datasets",
+      "apiVersion": "2018-06-01",
+      "properties": {
+        "linkedServiceName": {
+          "referenceName": "ls_ablob_covidreportingsapc",
+          "type": "LinkedServiceReference"
+        },
+        "type": "Json",
+        "typeProperties": {
+          "location": {
+            "type": "AzureBlobStorageLocation",
+            "fileSystem": "config",
+            "folderPath": "",
+            "fileName": "ecdc_file_list.json"
+          },
+          "encodingName": "UTF-8"
+        },
+        "schema": []
+      }
+    }
+  ]
+}
+TEMPLATE
+}
+
+
+resource "azurerm_data_factory_pipeline" "pl_lookup_and_copy_https_to_dls" {
+  name            = "pl_lookup_and_copy_https_to_dls"
+  data_factory_id = azurerm_data_factory.adf.id
+  concurrency     = 1
+
+  variables = {
+    sinkFolderPath    = "ecdc_data"
+    sourceRelativeURL = ""
+  }
+
+  activities_json = <<ACTIVITIES
+[
+  {
+    "name": "LookupFilesJson",
+    "type": "Lookup",
+    "typeProperties": {
+      "source": { "type": "JsonSource" },
+      "dataset": {
+        "referenceName": "ds_http_files_json",
+        "type": "DatasetReference"
+      },
+      "firstRowOnly": false
+    }
+  },
+  {
+    "name": "ForEachCopyFiles",
+    "type": "ForEach",
+    "dependsOn": [
+      { "activity": "LookupFilesJson", "dependencyConditions": [ "Succeeded" ] }
+    ],
+    "typeProperties": {
+      "isSequential": true,
+      "items": {
+        "value": "@activity('LookupFilesJson').output.value",
+        "type": "Expression"
+      },
+      "activities": [
+        {
+          "name": "SetSourceRelativeUrl",
+          "type": "SetVariable",
+          "typeProperties": {
+            "variableName": "sourceRelativeURL",
+            "value": "@item().sourceRelativeURL"
+          }
+        },
+        {
+          "name": "CopyFile",
+          "type": "Copy",
+          "typeProperties": {
+            "source": { 
+              "type": "DelimitedTextSource"
+            },
+            "sink": { 
+              "type": "DelimitedTextSink"
+            }
+          },
+          "inputs": [
+            {
+              "referenceName": "ds_https_death_caeses_http",
+              "type": "DatasetReference",
+              "parameters": {
+                "relativeUrl": "@item().sourceRelativeURL"
+              }
+            }
+          ],
+          "outputs": [
+            {
+              "referenceName": "ds_population_raw_dls_https_new",
+              "type": "DatasetReference",
+              "parameters": {
+                "folderPath": "@variables('sinkFolderPath')",
+                "fileName": "@item().sinkFileName"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
+ACTIVITIES
+}

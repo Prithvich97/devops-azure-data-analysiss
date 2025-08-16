@@ -55,6 +55,12 @@ variable "storage_container_name" {
   type        = string
   description = "Name of the blob container"
 }
+
+variable "storage_container_name1" {
+  type        = string
+  description = "Name of the blob container"
+}
+
 variable "storage_container_name_dl" {
   type        = string
   description = "Name of the blob container"
@@ -68,4 +74,28 @@ variable "covidreportingsapc_account_key" {
 variable "datalake_storage_account_key" {
   type      = string
   sensitive = true
+}
+
+variable "population_file_name" {
+  description = "File name to process"
+  type        = string
+  default     = "population_by_age.tsv.gz"
+}
+
+variable "files_to_be_analyzed" {
+  description = "File name to process"
+  type        = string
+  default     = "population_by_age.tsv.gz"
+}
+
+variable "population_file_delimiter" {
+  description = "Delimiter used in file"
+  type        = string
+  default     = "\t"
+}
+
+variable "population_file_compression" {
+  description = "Compression type (empty if none)"
+  type        = string
+  default     = "GZip"
 }
